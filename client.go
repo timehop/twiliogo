@@ -25,13 +25,45 @@ type TwilioClient struct {
 	accountSid string
 	authToken  string
 	rootUrl    string
+	options    options
 }
+
+type options struct {
+	httpClient *http.Client
+}
+
+type Option func(*options)
 
 var _ Client = &TwilioClient{}
 
-func NewClient(accountSid, authToken string) *TwilioClient {
+func NewClient(accountSid, authToken string, opts ...Option) *TwilioClient {
 	rootUrl := ROOT + "/" + VERSION + "/Accounts/" + accountSid
-	return &TwilioClient{accountSid, authToken, rootUrl}
+
+	tc := &TwilioClient{
+		accountSid: accountSid,
+		authToken:  authToken,
+		rootUrl:    rootUrl,
+		options: options{
+			httpClient: http.DefaultClient,
+		},
+	}
+
+	for _, opt := range opts {
+		opt(&tc.options)
+	}
+
+	return tc
+}
+
+// WithHTTPClient sets the http.Client to use for all http calls.
+//
+// If left unset or nil, the http.DefaultClient client will be used.
+func WithHTTPClient(httpClient *http.Client) Option {
+	return func(o *options) {
+		if httpClient != nil {
+			o.httpClient = httpClient
+		}
+	}
 }
 
 func (client *TwilioClient) post(values url.Values, uri string) ([]byte, error) {
@@ -43,9 +75,8 @@ func (client *TwilioClient) post(values url.Values, uri string) ([]byte, error) 
 
 	req.SetBasicAuth(client.AccountSid(), client.AuthToken())
 	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
-	httpClient := &http.Client{}
 
-	res, err := httpClient.Do(req)
+	res, err := client.options.httpClient.Do(req)
 
 	if err != nil {
 		return nil, err
@@ -87,9 +118,8 @@ func (client *TwilioClient) get(queryParams url.Values, uri string) ([]byte, err
 	}
 
 	req.SetBasicAuth(client.AccountSid(), client.AuthToken())
-	httpClient := &http.Client{}
 
-	res, err := httpClient.Do(req)
+	res, err := client.options.httpClient.Do(req)
 
 	if err != nil {
 		return nil, err
@@ -124,9 +154,8 @@ func (client *TwilioClient) delete(uri string) error {
 	}
 
 	req.SetBasicAuth(client.AccountSid(), client.AuthToken())
-	httpClient := &http.Client{}
 
-	res, err := httpClient.Do(req)
+	res, err := client.options.httpClient.Do(req)
 
 	if err != nil {
 		return err
